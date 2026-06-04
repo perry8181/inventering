@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Inventering</title>
+<title>EAN-scanner</title>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,7 +13,6 @@
     --surface: #1c1c24;
     --surface2: #252530;
     --accent: #6c63ff;
-    --accent2: #a78bfa;
     --green: #22c55e;
     --red: #ef4444;
     --text: #f1f1f5;
@@ -37,37 +35,27 @@
     min-height: 100dvh;
     max-width: 480px;
     margin: 0 auto;
-    padding: 0 0 env(safe-area-inset-bottom, 16px);
-  }
-
-  .header {
-    padding: 20px 20px 12px;
-    background: var(--bg);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-
-  .steps { display: flex; gap: 8px; margin-top: 12px; }
-  .step-dot { flex: 1; height: 4px; border-radius: 4px; background: var(--border); transition: background 0.3s; }
-  .step-dot.active { background: var(--accent); }
-  .step-dot.done   { background: var(--green); }
-
-  .content {
-    flex: 1;
-    padding: 24px 20px;
-    display: flex;
-    flex-direction: column;
+    padding: 0 20px calc(env(safe-area-inset-bottom, 16px) + 16px);
     gap: 20px;
   }
 
-  .step-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
-  .step-subtitle { font-size: 14px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .header {
+    padding: 20px 0 0;
+  }
 
-  /* ── Camera containers ── */
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .header p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Camera ── */
   .camera-wrap {
     position: relative;
     width: 100%;
@@ -75,9 +63,9 @@
     overflow: hidden;
     background: #000;
     aspect-ratio: 4/3;
+    flex-shrink: 0;
   }
 
-  /* ── Barcode scanner ── */
   #scan-video {
     width: 100%;
     height: 100%;
@@ -85,7 +73,7 @@
     display: block;
   }
 
-  #scan-overlay {
+  .scan-overlay {
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -93,12 +81,10 @@
 
   .scan-frame {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 80%;
-    height: 30%;
-    border: 2px solid rgba(108,99,255,0.8);
+    width: 80%; height: 32%;
+    border: 2px solid rgba(108,99,255,0.85);
     border-radius: 8px;
   }
 
@@ -112,284 +98,250 @@
   }
 
   @keyframes scanline {
-    0%   { transform: translateY(-30px); opacity: 0; }
-    20%  { opacity: 1; }
-    80%  { opacity: 1; }
-    100% { transform: translateY(30px); opacity: 0; }
+    0%   { transform: translateY(-28px); opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { transform: translateY(28px); opacity: 0; }
   }
 
-  .scan-label {
+  .scan-hint {
     position: absolute;
-    bottom: 12px;
-    left: 50%;
+    bottom: 12px; left: 50%;
     transform: translateX(-50%);
     font-size: 11px;
-    color: rgba(255,255,255,0.7);
+    color: rgba(255,255,255,0.65);
     background: rgba(0,0,0,0.5);
     padding: 3px 10px;
     border-radius: 20px;
     white-space: nowrap;
   }
 
-  /* ── OCR video ── */
-  #ocr-video-wrap { position: relative; width: 100%; height: 100%; }
-  #ocr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  #ocr-canvas { display: none; }
-
-  .sight-overlay { position: absolute; inset: 0; pointer-events: none; }
-  .sight-hole {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 82%; height: 28%;
-    background: transparent;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
-    border-radius: 8px;
-  }
-  .sight-box {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 82%; height: 28%;
-    border: 2px solid var(--accent2);
-    border-radius: 8px;
-    pointer-events: none;
-  }
-  .sight-label {
-    position: absolute;
-    bottom: -24px; left: 50%;
-    transform: translateX(-50%);
-    font-size: 11px; color: var(--accent2);
-    white-space: nowrap;
-    background: rgba(0,0,0,0.6);
-    padding: 2px 8px; border-radius: 20px;
-  }
-
-  /* ── Fields ── */
-  .field-group { display: flex; flex-direction: column; gap: 6px; }
-  label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
-  .input-wrap { position: relative; display: flex; align-items: center; }
-
-  input[type="text"], input[type="number"], textarea {
-    width: 100%;
+  /* ── Result box ── */
+  .result-box {
     background: var(--surface);
     border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    font-size: 16px;
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.25s;
+  }
+
+  .result-box.has-code {
+    border-color: var(--accent);
+  }
+
+  .result-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+
+  .result-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .result-code {
+    flex: 1;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
     color: var(--text);
-    outline: none;
-    transition: border-color 0.2s;
-    -webkit-appearance: none;
+    word-break: break-all;
   }
-  textarea { resize: none; min-height: 80px; line-height: 1.5; font-family: inherit; }
-  input:focus, textarea:focus { border-color: var(--accent); }
-  input[readonly] { color: var(--muted); background: var(--surface2); cursor: default; }
 
-  /* ── Buttons ── */
-  .btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%; padding: 16px;
-    border-radius: var(--radius); border: none;
-    font-size: 16px; font-weight: 700;
+  .result-code.empty {
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  .btn-copy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 18px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+    flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
-    letter-spacing: -0.2px;
+    transition: opacity 0.15s, transform 0.1s;
   }
-  .btn:active { transform: scale(0.97); opacity: 0.85; }
-  .btn-primary  { background: var(--accent); color: #fff; }
-  .btn-success  { background: var(--green); color: #fff; font-size: 18px; padding: 20px; border-radius: 20px; }
-  .btn-outline  { background: transparent; color: var(--muted); border: 1.5px solid var(--border); font-size: 14px; padding: 12px; }
-  .btn-sm       { padding: 12px 16px; font-size: 14px; border-radius: 12px; }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-  /* ── OCR status ── */
-  .ocr-status {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px;
-    background: var(--surface); border-radius: 12px;
-    font-size: 14px; color: var(--muted); min-height: 48px;
+  .btn-copy:active { transform: scale(0.95); opacity: 0.85; }
+  .btn-copy:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  .btn-copy.copied {
+    background: var(--green);
   }
-  .spinner {
-    width: 18px; height: 18px;
-    border: 2px solid var(--border); border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite; flex-shrink: 0;
+
+  /* ── History ── */
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .history-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .btn-clear {
+    font-size: 12px;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s;
+  }
+
+  .history-item:active { border-color: var(--accent); }
+
+  .history-code {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+  }
+
+  .history-time {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .history-copy-icon {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .empty-history {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    padding: 16px 0;
+  }
 
   /* ── Toast ── */
   #toast {
     position: fixed;
     bottom: calc(env(safe-area-inset-bottom, 16px) + 20px);
-    left: 50%; transform: translateX(-50%) translateY(20px);
-    background: var(--surface2); color: var(--text);
-    padding: 12px 20px; border-radius: 30px;
-    font-size: 14px; font-weight: 600;
-    opacity: 0; transition: opacity 0.25s, transform 0.25s;
-    z-index: 999; max-width: calc(100vw - 40px);
-    text-align: center; border: 1px solid var(--border); white-space: nowrap;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    color: var(--text);
+    padding: 11px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 999;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    pointer-events: none;
   }
+
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.success { border-color: var(--green); color: var(--green); }
   #toast.error   { border-color: var(--red);   color: var(--red); }
-
-  /* ── Views ── */
-  .view { display: none; flex-direction: column; gap: 20px; }
-  .view.active { display: flex; }
-
-  /* ── Price ── */
-  .price-input-wrap { position: relative; }
-  .price-input-wrap input { padding-left: 40px; font-size: 24px; font-weight: 700; padding-top: 16px; padding-bottom: 16px; }
-  .price-currency { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--muted); font-weight: 700; }
-
-  /* ── Summary ── */
-  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-  .summary-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .summary-key { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; flex-shrink: 0; }
-  .summary-val { font-size: 14px; font-weight: 600; text-align: right; word-break: break-all; }
-  .divider { height: 1px; background: var(--border); }
 </style>
 </head>
 <body>
 <div id="app">
+
   <div class="header">
-    <h1>📦 Inventering</h1>
-    <div class="steps">
-      <div class="step-dot active" id="dot1"></div>
-      <div class="step-dot" id="dot2"></div>
-      <div class="step-dot" id="dot3"></div>
+    <h1>EAN-scanner</h1>
+    <p>Rikta kameran mot streckkoden</p>
+  </div>
+
+  <!-- Camera -->
+  <div class="camera-wrap">
+    <video id="scan-video" autoplay playsinline muted></video>
+    <div class="scan-overlay">
+      <div class="scan-frame">
+        <div class="scan-line"></div>
+      </div>
+      <div class="scan-hint">Håll streckkoden inom rutan</div>
     </div>
   </div>
 
-  <div class="content">
-
-    <!-- ═══ STEP 1: EAN Scanner ═══ -->
-    <div class="view active" id="view1">
-      <div>
-        <div class="step-title">Steg 1 av 3</div>
-        <div class="step-subtitle">Rikta kameran mot streckkoden. Skanningen sker automatiskt.</div>
-      </div>
-
-      <div class="camera-wrap">
-        <video id="scan-video" autoplay playsinline muted></video>
-        <div id="scan-overlay">
-          <div class="scan-frame">
-            <div class="scan-line"></div>
-          </div>
-          <div class="scan-label">Håll streckkoden inom rutan</div>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label>EAN-kod</label>
-        <div class="input-wrap">
-          <input type="text" id="ean-display" readonly placeholder="Väntar på skanning…">
-        </div>
-      </div>
-
-      <button class="btn btn-outline btn-sm" id="btn-manual-ean" onclick="enableManualEAN()">
-        Ange EAN manuellt
+  <!-- Result -->
+  <div class="result-box" id="result-box">
+    <div class="result-label">Senast skannad</div>
+    <div class="result-row">
+      <span class="result-code empty" id="result-code">Väntar på skanning…</span>
+      <button class="btn-copy" id="btn-copy" onclick="copyCode()" disabled>
+        Kopiera
       </button>
     </div>
-
-    <!-- ═══ STEP 2: OCR ═══ -->
-    <div class="view" id="view2">
-      <div>
-        <div class="step-title">Steg 2 av 3</div>
-        <div class="step-subtitle">Rikta kameran mot produktnamnet och tryck på "Läs text".</div>
-      </div>
-
-      <div class="camera-wrap">
-        <div id="ocr-video-wrap">
-          <video id="ocr-video" autoplay playsinline muted></video>
-          <canvas id="ocr-canvas"></canvas>
-          <div class="sight-overlay">
-            <div class="sight-hole"></div>
-          </div>
-          <div class="sight-box">
-            <div class="sight-label">Placera produktnamnet här</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ocr-status" id="ocr-status">
-        <span>Tryck på knappen för att läsa text</span>
-      </div>
-
-      <button class="btn btn-primary" id="btn-ocr" onclick="runOCR()">
-        📷 Läs text
-      </button>
-
-      <div class="field-group">
-        <label>Produktnamn</label>
-        <textarea id="product-name" rows="3" placeholder="Texten visas här – korrigera vid behov…"></textarea>
-      </div>
-
-      <button class="btn btn-primary" id="btn-next-step3" onclick="goToStep3()" disabled>
-        Nästa →
-      </button>
-
-      <button class="btn btn-outline btn-sm" onclick="goToStep1()">
-        ← Skanna om EAN
-      </button>
-    </div>
-
-    <!-- ═══ STEP 3: Price & Save ═══ -->
-    <div class="view" id="view3">
-      <div>
-        <div class="step-title">Steg 3 av 3</div>
-        <div class="step-subtitle">Ange inköpspriset och spara produkten.</div>
-      </div>
-
-      <div class="summary-card">
-        <div class="summary-row">
-          <span class="summary-key">EAN</span>
-          <span class="summary-val" id="sum-ean">–</span>
-        </div>
-        <div class="divider"></div>
-        <div class="summary-row">
-          <span class="summary-key">Produkt</span>
-          <span class="summary-val" id="sum-name">–</span>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label>Inköpspris exkl. moms (SEK)</label>
-        <div class="price-input-wrap">
-          <span class="price-currency">kr</span>
-          <input type="number" id="price" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
-        </div>
-      </div>
-
-      <button class="btn btn-success" id="btn-save" onclick="saveProduct()">
-        ✓ SPARA
-      </button>
-
-      <button class="btn btn-outline btn-sm" onclick="goToStep2()">
-        ← Ändra produktnamn
-      </button>
-    </div>
-
   </div>
+
+  <!-- History -->
+  <div>
+    <div class="history-header">
+      <span class="history-title">Historik</span>
+      <button class="btn-clear" onclick="clearHistory()">Rensa</button>
+    </div>
+  </div>
+  <div class="history-list" id="history-list">
+    <div class="empty-history" id="empty-msg">Inga koder skannade ännu</div>
+  </div>
+
 </div>
 
 <div id="toast"></div>
 
 <script>
-const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzTWidqxeDS1nSw0bPpZ7aR1KObiQnls9OQ21BHV98pOs4E72hLTk3CHG56r0301OkZeg/exec';
-
-// ── State ──
-let scannedEAN   = '';
-let ocrStream    = null;
-let ocrBusy      = false;
-let scanStream   = null;
 let scanActive   = false;
+let scanStream   = null;
 let quaggaActive = false;
+let lastCode     = '';
+let history      = JSON.parse(localStorage.getItem('ean_history') || '[]');
 
-// ── Utils ──
-function toast(msg, type = '', dur = 2800) {
+// ── Toast ──
+function toast(msg, type = '', dur = 2000) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className   = 'show ' + type;
@@ -397,25 +349,86 @@ function toast(msg, type = '', dur = 2800) {
   el._t = setTimeout(() => { el.className = ''; }, dur);
 }
 
-function setDots(active) {
-  [1, 2, 3].forEach(i => {
-    const d = document.getElementById('dot' + i);
-    d.className = 'step-dot' + (i < active ? ' done' : i === active ? ' active' : '');
-  });
+// ── Copy ──
+async function copyCode(code) {
+  const val = code || lastCode;
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = '✓ Kopierad';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Kopiera';
+      btn.classList.remove('copied');
+    }, 1800);
+    toast('✓ ' + val + ' kopierad', 'success');
+  } catch(e) {
+    // Fallback for older iOS
+    const ta = document.createElement('textarea');
+    ta.value = val;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('✓ Kopierad', 'success');
+  }
 }
 
-function showView(n) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view' + n).classList.add('active');
-  setDots(n);
+// ── Result display ──
+function showResult(code) {
+  lastCode = code;
+  const el   = document.getElementById('result-code');
+  const box  = document.getElementById('result-box');
+  const btn  = document.getElementById('btn-copy');
+
+  el.textContent = code;
+  el.classList.remove('empty');
+  box.classList.add('has-code');
+  btn.disabled = false;
+
+  addToHistory(code);
 }
 
-// ════════════════════════════════════════════
-//  STEP 1 – Barcode scanner
-//  Primary:  BarcodeDetector API (iOS 17+, Chrome)
-//  Fallback: Quagga2
-// ════════════════════════════════════════════
-function stopScanCamera() {
+// ── History ──
+function addToHistory(code) {
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  // Avoid duplicates in a row
+  if (history.length > 0 && history[0].code === code) return;
+  history.unshift({ code, time });
+  if (history.length > 50) history.pop();
+  localStorage.setItem('ean_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function clearHistory() {
+  history = [];
+  localStorage.removeItem('ean_history');
+  renderHistory();
+}
+
+function renderHistory() {
+  const list  = document.getElementById('history-list');
+  const empty = document.getElementById('empty-msg');
+
+  if (history.length === 0) {
+    list.innerHTML = '<div class="empty-history" id="empty-msg">Inga koder skannade ännu</div>';
+    return;
+  }
+
+  list.innerHTML = history.map(item => `
+    <div class="history-item" onclick="copyCode('${item.code}')">
+      <span class="history-code">${item.code}</span>
+      <span class="history-time">${item.time}</span>
+      <span class="history-copy-icon">⎘</span>
+    </div>
+  `).join('');
+}
+
+// ── Scanner ──
+function stopScanner() {
   scanActive = false;
   if (quaggaActive) {
     try { Quagga.stop(); } catch(e) {}
@@ -429,9 +442,8 @@ function stopScanCamera() {
   if (v) v.srcObject = null;
 }
 
-async function startQRScanner() {
-  stopOCRCamera();
-  stopScanCamera();
+async function startScanner() {
+  stopScanner();
   scanActive = true;
 
   if ('BarcodeDetector' in window) {
@@ -441,7 +453,6 @@ async function startQRScanner() {
   }
 }
 
-// ── BarcodeDetector (native, iOS 17+) ──
 async function startNativeScanner() {
   try {
     scanStream = await navigator.mediaDevices.getUserMedia({
@@ -459,28 +470,29 @@ async function startNativeScanner() {
       detector = new BarcodeDetector();
     }
 
+    let cooldown = false;
     const loop = async () => {
       if (!scanActive) return;
-      if (video.readyState >= 2) {
+      if (!cooldown && video.readyState >= 2) {
         try {
           const results = await detector.detect(video);
           if (results.length > 0) {
-            onEANScanned(results[0].rawValue);
-            return;
+            cooldown = true;
+            onDetected(results[0].rawValue);
+            setTimeout(() => { cooldown = false; }, 2000);
           }
-        } catch(e) { /* ignore single frame errors */ }
+        } catch(e) {}
       }
-      setTimeout(() => requestAnimationFrame(loop), 80);
+      setTimeout(() => requestAnimationFrame(loop), 100);
     };
     requestAnimationFrame(loop);
 
   } catch(err) {
-    console.warn('BarcodeDetector camera error, falling back to Quagga:', err);
+    console.warn('BarcodeDetector failed, using Quagga:', err);
     startQuaggaScanner();
   }
 }
 
-// ── Quagga2 fallback ──
 function startQuaggaScanner() {
   if (quaggaActive) return;
 
@@ -501,244 +513,47 @@ function startQuaggaScanner() {
     locate: true,
   }, err => {
     if (err) {
-      console.error('Quagga init error:', err);
-      toast('Kamerafel – kontrollera behörigheter', 'error');
+      console.error('Quagga init:', err);
+      toast('Kamerafel – kontrollera behörigheter', 'error', 4000);
       return;
     }
     Quagga.start();
     quaggaActive = true;
   });
 
+  let lastQuaggaCode = '';
+  let quaggaCooldown = false;
   Quagga.offDetected();
   Quagga.onDetected(result => {
     const code = result?.codeResult?.code;
-    if (code && code.length >= 8) {
-      onEANScanned(code);
-    }
+    if (!code || code.length < 8 || quaggaCooldown) return;
+    if (code === lastQuaggaCode) return;
+    lastQuaggaCode = code;
+    quaggaCooldown = true;
+    setTimeout(() => { quaggaCooldown = false; lastQuaggaCode = ''; }, 2000);
+    onDetected(code);
   });
 }
 
-function onEANScanned(code) {
-  if (!scanActive) return;
-  stopScanCamera();
-  scannedEAN = code;
-  const inp = document.getElementById('ean-display');
-  inp.value = code;
-  toast('✓ Streckkod läst: ' + code, 'success');
-
-  // Show a "Fortsätt" button as immediate fallback
-  const btn = document.getElementById('btn-manual-ean');
-  btn.textContent = '▶ Fortsätt till steg 2';
-  btn.style.background = 'var(--accent)';
-  btn.style.color = '#fff';
-  btn.style.border = 'none';
-  btn.onclick = () => goToStep2();
-
-  setTimeout(() => goToStep2(), 1200);
-}
-
-function enableManualEAN() {
-  stopScanCamera();
-  const input = document.getElementById('ean-display');
-  input.removeAttribute('readonly');
-  input.placeholder = 'Ange EAN-kod…';
-  input.focus();
-
-  input.oninput = () => {
-    const v = input.value.trim();
-    if (v.length >= 8) {
-      const btn = document.getElementById('btn-manual-ean');
-      btn.textContent = 'Fortsätt →';
-      btn.onclick = () => { scannedEAN = v; goToStep2(); };
-    }
-  };
-  input.onkeydown = e => {
-    if (e.key === 'Enter') { scannedEAN = input.value.trim(); goToStep2(); }
-  };
-}
-
-function goToStep1() {
-  scannedEAN = '';
-  const inp = document.getElementById('ean-display');
-  inp.value = '';
-  inp.setAttribute('readonly', true);
-  inp.placeholder = 'Väntar på skanning…';
-  const btn = document.getElementById('btn-manual-ean');
-  btn.textContent = 'Ange EAN manuellt';
-  btn.onclick = enableManualEAN;
-  showView(1);
-  startQRScanner();
-}
-
-// ════════════════════════════════════════════
-//  STEP 2 – OCR
-// ════════════════════════════════════════════
-async function startOCRCamera() {
-  try {
-    ocrStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-    const video = document.getElementById('ocr-video');
-    video.srcObject = ocrStream;
-    await video.play();
-  } catch (err) {
-    console.error('OCR camera error:', err);
-    toast('Kamerafel för OCR', 'error');
-  }
-}
-
-function stopOCRCamera() {
-  if (ocrStream) {
-    ocrStream.getTracks().forEach(t => t.stop());
-    ocrStream = null;
-  }
-  const video = document.getElementById('ocr-video');
-  if (video) video.srcObject = null;
-}
-
-async function runOCR() {
-  if (ocrBusy) return;
-  ocrBusy = true;
-
-  const btn    = document.getElementById('btn-ocr');
-  const status = document.getElementById('ocr-status');
-  btn.disabled = true;
-  status.innerHTML = '<div class="spinner"></div><span>Läser text…</span>';
-
-  const video  = document.getElementById('ocr-video');
-  const canvas = document.getElementById('ocr-canvas');
-
-  const vw = video.videoWidth  || 640;
-  const vh = video.videoHeight || 480;
-  const cropW = Math.round(vw * 0.82);
-  const cropH = Math.round(vh * 0.28);
-  const cropX = Math.round((vw - cropW) / 2);
-  const cropY = Math.round((vh - cropH) / 2);
-
-  canvas.width  = cropW;
-  canvas.height = cropH;
-  canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-  try {
-    const result = await Tesseract.recognize(canvas, 'swe+eng', {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round((m.progress || 0) * 100);
-          status.innerHTML = `<div class="spinner"></div><span>Läser text… ${pct}%</span>`;
-        }
-      }
-    });
-
-    const text = (result.data.text || '').replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-
-    if (text.length > 1) {
-      document.getElementById('product-name').value = text;
-      status.innerHTML = '<span style="color:var(--green)">✓ Text läst – korrigera vid behov</span>';
-      document.getElementById('btn-next-step3').disabled = false;
-      toast('Text läst!', 'success');
-    } else {
-      status.innerHTML = '<span style="color:var(--red)">Ingen text hittades – försök igen</span>';
-      toast('Ingen text hittades', 'error');
-    }
-  } catch (err) {
-    console.error('OCR error:', err);
-    status.innerHTML = '<span style="color:var(--red)">OCR-fel – försök igen</span>';
-    toast('OCR-fel', 'error');
-  }
-
-  btn.disabled = false;
-  ocrBusy = false;
-}
-
-async function goToStep2() {
-  if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
-  stopScanCamera();
-  stopOCRCamera();
-
-  document.getElementById('product-name').value = '';
-  document.getElementById('btn-next-step3').disabled = true;
-  document.getElementById('ocr-status').innerHTML = '<span>Tryck på knappen för att läsa text</span>';
-
-  // Reset the fortsätt-button style
-  const btn = document.getElementById('btn-manual-ean');
-  btn.textContent = 'Ange EAN manuellt';
-  btn.style = '';
-  btn.onclick = enableManualEAN;
-
-  showView(2);
-
-  // Let iOS fully release the camera before acquiring a new stream
-  await new Promise(r => setTimeout(r, 600));
-  startOCRCamera();
-}
-
-// ════════════════════════════════════════════
-//  STEP 3 – Price & Save
-// ════════════════════════════════════════════
-function goToStep3() {
-  const name = document.getElementById('product-name').value.trim();
-  if (!name) { toast('Ange ett produktnamn', 'error'); return; }
-  stopOCRCamera();
-  document.getElementById('sum-ean').textContent  = scannedEAN;
-  document.getElementById('sum-name').textContent = name;
-  document.getElementById('price').value = '';
-  showView(3);
-  setTimeout(() => document.getElementById('price').focus(), 300);
-}
-
-document.getElementById('product-name').addEventListener('input', function() {
-  document.getElementById('btn-next-step3').disabled = this.value.trim().length === 0;
-});
-
-async function saveProduct() {
-  const ean   = scannedEAN;
-  const name  = document.getElementById('product-name').value.trim();
-  const price = document.getElementById('price').value.trim();
-
-  if (!ean)   { toast('EAN-kod saknas', 'error');     return; }
-  if (!name)  { toast('Produktnamn saknas', 'error'); return; }
-  if (!price) { toast('Ange ett pris', 'error');      return; }
-
-  const btn = document.getElementById('btn-save');
-  btn.disabled = true;
-  btn.textContent = 'Sparar…';
-
-  try {
-    await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ean, productName: name, price: parseFloat(price), timestamp: new Date().toISOString() })
-    });
-
-    toast('✓ Sparad! Nästa produkt…', 'success', 2200);
-    setTimeout(() => {
-      scannedEAN = '';
-      btn.disabled = false;
-      btn.innerHTML = '✓ SPARA';
-      goToStep1();
-    }, 1200);
-
-  } catch (err) {
-    console.error('Fetch error:', err);
-    toast('Nätverksfel – kontrollera anslutning', 'error');
-    btn.disabled = false;
-    btn.innerHTML = '✓ SPARA';
-  }
+function onDetected(code) {
+  showResult(code);
+  // Restart scanner after 2s so user can scan next item
+  setTimeout(() => {
+    if (scanActive) return; // already restarted
+  }, 2100);
 }
 
 // ── Boot ──
-window.addEventListener('DOMContentLoaded', () => { startQRScanner(); });
+window.addEventListener('DOMContentLoaded', () => {
+  renderHistory();
+  startScanner();
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    stopScanCamera();
-    stopOCRCamera();
+    stopScanner();
   } else {
-    const active = document.querySelector('.view.active')?.id;
-    if (active === 'view1') startQRScanner();
-    if (active === 'view2') startOCRCamera();
+    startScanner();
   }
 });
 </script>
