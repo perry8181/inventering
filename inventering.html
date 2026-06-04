@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Inventering</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,7 +40,6 @@
     padding: 0 0 env(safe-area-inset-bottom, 16px);
   }
 
-  /* ── Header ── */
   .header {
     padding: 20px 20px 12px;
     background: var(--bg);
@@ -50,31 +49,13 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .header h1 {
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 
-  /* ── Step indicator ── */
-  .steps {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .step-dot {
-    flex: 1;
-    height: 4px;
-    border-radius: 4px;
-    background: var(--border);
-    transition: background 0.3s;
-  }
-
+  .steps { display: flex; gap: 8px; margin-top: 12px; }
+  .step-dot { flex: 1; height: 4px; border-radius: 4px; background: var(--border); transition: background 0.3s; }
   .step-dot.active { background: var(--accent); }
   .step-dot.done   { background: var(--green); }
 
-  /* ── Content ── */
   .content {
     flex: 1;
     padding: 24px 20px;
@@ -83,20 +64,10 @@
     gap: 20px;
   }
 
-  .step-title {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.4px;
-  }
+  .step-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+  .step-subtitle { font-size: 14px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
 
-  .step-subtitle {
-    font-size: 14px;
-    color: var(--muted);
-    margin-top: 4px;
-    line-height: 1.5;
-  }
-
-  /* ── Camera container ── */
+  /* ── Camera containers ── */
   .camera-wrap {
     position: relative;
     width: 100%;
@@ -106,107 +77,98 @@
     aspect-ratio: 4/3;
   }
 
-  #qr-reader, #ocr-video-wrap {
-    width: 100%;
-    height: 100%;
-  }
-
-  /* Override html5-qrcode styles */
-  #qr-reader > div:first-child { border: none !important; }
-  #qr-reader img, #qr-reader button { display: none !important; }
-  #qr-reader__scan_region { height: 100% !important; }
-  #qr-reader__scan_region video {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-  }
-  #qr-reader__scan_region > img { display: none !important; }
-
-  /* ── OCR overlay ── */
-  #ocr-video-wrap {
-    position: relative;
-  }
-
-  #ocr-video {
+  /* ── Barcode scanner ── */
+  #scan-video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
 
-  #ocr-canvas { display: none; }
+  #scan-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
 
-  .sight-box {
+  .scan-frame {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 82%;
-    height: 28%;
-    border: 2px solid var(--accent2);
+    width: 80%;
+    height: 30%;
+    border: 2px solid rgba(108,99,255,0.8);
     border-radius: 8px;
-    pointer-events: none;
   }
 
-  .sight-box::before, .sight-box::after {
-    content: '';
+  .scan-line {
     position: absolute;
-    width: 20px;
-    height: 20px;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--accent), transparent);
+    animation: scanline 1.8s ease-in-out infinite;
+    top: 50%;
   }
 
-  .sight-label {
+  @keyframes scanline {
+    0%   { transform: translateY(-30px); opacity: 0; }
+    20%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(30px); opacity: 0; }
+  }
+
+  .scan-label {
     position: absolute;
-    bottom: -24px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 11px;
-    color: var(--accent2);
-    white-space: nowrap;
-    background: rgba(0,0,0,0.6);
-    padding: 2px 8px;
+    color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.5);
+    padding: 3px 10px;
     border-radius: 20px;
+    white-space: nowrap;
   }
 
-  .sight-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.45);
-    pointer-events: none;
-  }
+  /* ── OCR video ── */
+  #ocr-video-wrap { position: relative; width: 100%; height: 100%; }
+  #ocr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #ocr-canvas { display: none; }
 
+  .sight-overlay { position: absolute; inset: 0; pointer-events: none; }
   .sight-hole {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 82%;
-    height: 28%;
+    width: 82%; height: 28%;
     background: transparent;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
     border-radius: 8px;
   }
-
-  /* ── Input fields ── */
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .sight-box {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82%; height: 28%;
+    border: 2px solid var(--accent2);
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  .sight-label {
+    position: absolute;
+    bottom: -24px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; color: var(--accent2);
+    white-space: nowrap;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 8px; border-radius: 20px;
   }
 
-  label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-  }
-
-  .input-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
+  /* ── Fields ── */
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .input-wrap { position: relative; display: flex; align-items: center; }
 
   input[type="text"], input[type="number"], textarea {
     width: 100%;
@@ -220,140 +182,56 @@
     transition: border-color 0.2s;
     -webkit-appearance: none;
   }
-
-  textarea {
-    resize: none;
-    min-height: 80px;
-    line-height: 1.5;
-    font-family: inherit;
-  }
-
-  input:focus, textarea:focus {
-    border-color: var(--accent);
-  }
-
-  input[readonly] {
-    color: var(--muted);
-    background: var(--surface2);
-    cursor: default;
-  }
-
-  .field-badge {
-    position: absolute;
-    right: 12px;
-    background: var(--green);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 20px;
-    letter-spacing: 0.4px;
-  }
+  textarea { resize: none; min-height: 80px; line-height: 1.5; font-family: inherit; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  input[readonly] { color: var(--muted); background: var(--surface2); cursor: default; }
 
   /* ── Buttons ── */
   .btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    padding: 16px;
-    border-radius: var(--radius);
-    border: none;
-    font-size: 16px;
-    font-weight: 700;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 16px;
+    border-radius: var(--radius); border: none;
+    font-size: 16px; font-weight: 700;
     cursor: pointer;
     transition: opacity 0.15s, transform 0.1s;
     -webkit-tap-highlight-color: transparent;
     letter-spacing: -0.2px;
   }
-
   .btn:active { transform: scale(0.97); opacity: 0.85; }
-
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-  }
-
-  .btn-success {
-    background: var(--green);
-    color: #fff;
-    font-size: 18px;
-    padding: 20px;
-    border-radius: 20px;
-  }
-
-  .btn-outline {
-    background: transparent;
-    color: var(--muted);
-    border: 1.5px solid var(--border);
-    font-size: 14px;
-    padding: 12px;
-  }
-
-  .btn-sm {
-    padding: 12px 16px;
-    font-size: 14px;
-    border-radius: 12px;
-  }
-
-  .btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: none;
-  }
+  .btn-primary  { background: var(--accent); color: #fff; }
+  .btn-success  { background: var(--green); color: #fff; font-size: 18px; padding: 20px; border-radius: 20px; }
+  .btn-outline  { background: transparent; color: var(--muted); border: 1.5px solid var(--border); font-size: 14px; padding: 12px; }
+  .btn-sm       { padding: 12px 16px; font-size: 14px; border-radius: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
   /* ── OCR status ── */
   .ocr-status {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: flex; align-items: center; gap: 10px;
     padding: 12px 16px;
-    background: var(--surface);
-    border-radius: 12px;
-    font-size: 14px;
-    color: var(--muted);
-    min-height: 48px;
+    background: var(--surface); border-radius: 12px;
+    font-size: 14px; color: var(--muted); min-height: 48px;
   }
-
   .spinner {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
+    width: 18px; height: 18px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
     border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    flex-shrink: 0;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
   }
-
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Toast ── */
   #toast {
     position: fixed;
     bottom: calc(env(safe-area-inset-bottom, 16px) + 20px);
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--surface2);
-    color: var(--text);
-    padding: 12px 20px;
-    border-radius: 30px;
-    font-size: 14px;
-    font-weight: 600;
-    opacity: 0;
-    transition: opacity 0.25s, transform 0.25s;
-    z-index: 999;
-    max-width: calc(100vw - 40px);
-    text-align: center;
-    border: 1px solid var(--border);
-    white-space: nowrap;
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); color: var(--text);
+    padding: 12px 20px; border-radius: 30px;
+    font-size: 14px; font-weight: 600;
+    opacity: 0; transition: opacity 0.25s, transform 0.25s;
+    z-index: 999; max-width: calc(100vw - 40px);
+    text-align: center; border: 1px solid var(--border); white-space: nowrap;
   }
-
-  #toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.success { border-color: var(--green); color: var(--green); }
   #toast.error   { border-color: var(--red);   color: var(--red); }
 
@@ -362,66 +240,16 @@
   .view.active { display: flex; }
 
   /* ── Price ── */
-  .price-input-wrap {
-    position: relative;
-  }
+  .price-input-wrap { position: relative; }
+  .price-input-wrap input { padding-left: 40px; font-size: 24px; font-weight: 700; padding-top: 16px; padding-bottom: 16px; }
+  .price-currency { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--muted); font-weight: 700; }
 
-  .price-input-wrap input {
-    padding-left: 40px;
-    font-size: 24px;
-    font-weight: 700;
-    padding-top: 16px;
-    padding-bottom: 16px;
-  }
-
-  .price-currency {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 20px;
-    color: var(--muted);
-    font-weight: 700;
-  }
-
-  /* ── Summary card ── */
-  .summary-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .summary-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .summary-key {
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 2px;
-    flex-shrink: 0;
-  }
-
-  .summary-val {
-    font-size: 14px;
-    font-weight: 600;
-    text-align: right;
-    word-break: break-all;
-  }
-
-  .divider {
-    height: 1px;
-    background: var(--border);
-  }
+  /* ── Summary ── */
+  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .summary-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .summary-key { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; flex-shrink: 0; }
+  .summary-val { font-size: 14px; font-weight: 600; text-align: right; word-break: break-all; }
+  .divider { height: 1px; background: var(--border); }
 </style>
 </head>
 <body>
@@ -441,11 +269,17 @@
     <div class="view active" id="view1">
       <div>
         <div class="step-title">Steg 1 av 3</div>
-        <div class="step-subtitle">Rikta kameran mot streckkoden. Skanningen startar automatiskt.</div>
+        <div class="step-subtitle">Rikta kameran mot streckkoden. Skanningen sker automatiskt.</div>
       </div>
 
       <div class="camera-wrap">
-        <div id="qr-reader"></div>
+        <video id="scan-video" autoplay playsinline muted></video>
+        <div id="scan-overlay">
+          <div class="scan-frame">
+            <div class="scan-line"></div>
+          </div>
+          <div class="scan-label">Håll streckkoden inom rutan</div>
+        </div>
       </div>
 
       <div class="field-group">
@@ -544,22 +378,17 @@
 <div id="toast"></div>
 
 <script>
-// ════════════════════════════════════════════
-//  CONFIG – byt ut URL:en mot din Webhook-URL
-// ════════════════════════════════════════════
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzTWidqxeDS1nSw0bPpZ7aR1KObiQnls9OQ21BHV98pOs4E72hLTk3CHG56r0301OkZeg/exec';
 
-// ════════════════════════════════════════════
-//  STATE
-// ════════════════════════════════════════════
-let scannedEAN  = '';
-let ocrStream   = null;
-let html5QrCode = null;
-let ocrBusy     = false;
+// ── State ──
+let scannedEAN   = '';
+let ocrStream    = null;
+let ocrBusy      = false;
+let scanStream   = null;
+let scanActive   = false;
+let quaggaActive = false;
 
-// ════════════════════════════════════════════
-//  UTILS
-// ════════════════════════════════════════════
+// ── Utils ──
 function toast(msg, type = '', dur = 2800) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -582,40 +411,116 @@ function showView(n) {
 }
 
 // ════════════════════════════════════════════
-//  STEP 1 – EAN Scanner
+//  STEP 1 – Barcode scanner
+//  Primary:  BarcodeDetector API (iOS 17+, Chrome)
+//  Fallback: Quagga2
 // ════════════════════════════════════════════
-function startQRScanner() {
-  stopOCRCamera();
+function stopScanCamera() {
+  scanActive = false;
+  if (quaggaActive) {
+    try { Quagga.stop(); } catch(e) {}
+    quaggaActive = false;
+  }
+  if (scanStream) {
+    scanStream.getTracks().forEach(t => t.stop());
+    scanStream = null;
+  }
+  const v = document.getElementById('scan-video');
+  if (v) v.srcObject = null;
+}
 
-  if (html5QrCode) {
-    html5QrCode.stop().catch(() => {}).finally(initScanner);
+async function startQRScanner() {
+  stopOCRCamera();
+  stopScanCamera();
+  scanActive = true;
+
+  if ('BarcodeDetector' in window) {
+    await startNativeScanner();
   } else {
-    initScanner();
+    startQuaggaScanner();
   }
 }
 
-function initScanner() {
-  document.getElementById('qr-reader').innerHTML = '';
-  html5QrCode = new Html5Qrcode('qr-reader');
+// ── BarcodeDetector (native, iOS 17+) ──
+async function startNativeScanner() {
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const video = document.getElementById('scan-video');
+    video.srcObject = scanStream;
+    await video.play();
 
-  const config = {
-    fps: 10,
-    qrbox: { width: 280, height: 140 },
-  };
+    let detector;
+    try {
+      detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf'] });
+    } catch(e) {
+      detector = new BarcodeDetector();
+    }
 
-  html5QrCode.start(
-    { facingMode: 'environment' },
-    config,
-    onEANScanned,
-    () => {}
-  ).catch(err => {
-    console.error('Scanner error:', err);
-    toast('Kamerafel – kontrollera behörigheter', 'error');
+    const loop = async () => {
+      if (!scanActive) return;
+      if (video.readyState >= 2) {
+        try {
+          const results = await detector.detect(video);
+          if (results.length > 0) {
+            onEANScanned(results[0].rawValue);
+            return;
+          }
+        } catch(e) { /* ignore single frame errors */ }
+      }
+      setTimeout(() => requestAnimationFrame(loop), 80);
+    };
+    requestAnimationFrame(loop);
+
+  } catch(err) {
+    console.warn('BarcodeDetector camera error, falling back to Quagga:', err);
+    startQuaggaScanner();
+  }
+}
+
+// ── Quagga2 fallback ──
+function startQuaggaScanner() {
+  if (quaggaActive) return;
+
+  Quagga.init({
+    inputStream: {
+      name: 'Live',
+      type: 'LiveStream',
+      target: document.getElementById('scan-video').parentElement,
+      constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+    },
+    locator: { patchSize: 'medium', halfSample: true },
+    numOfWorkers: 2,
+    frequency: 10,
+    decoder: {
+      readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'],
+      multiple: false,
+    },
+    locate: true,
+  }, err => {
+    if (err) {
+      console.error('Quagga init error:', err);
+      toast('Kamerafel – kontrollera behörigheter', 'error');
+      return;
+    }
+    Quagga.start();
+    quaggaActive = true;
+  });
+
+  Quagga.offDetected();
+  Quagga.onDetected(result => {
+    const code = result?.codeResult?.code;
+    if (code && code.length >= 8) {
+      onEANScanned(code);
+    }
   });
 }
 
 function onEANScanned(code) {
-  html5QrCode.stop().catch(() => {});
+  if (!scanActive) return;
+  stopScanCamera();
   scannedEAN = code;
   document.getElementById('ean-display').value = code;
   toast('✓ Streckkod läst: ' + code, 'success');
@@ -623,22 +528,18 @@ function onEANScanned(code) {
 }
 
 function enableManualEAN() {
+  stopScanCamera();
   const input = document.getElementById('ean-display');
   input.removeAttribute('readonly');
-  input.focus();
   input.placeholder = 'Ange EAN-kod…';
+  input.focus();
 
-  if (html5QrCode) html5QrCode.stop().catch(() => {});
-
-  // Listen for enter or 13-digit input
   input.oninput = () => {
     const v = input.value.trim();
     if (v.length >= 8) {
-      document.getElementById('btn-manual-ean').textContent = 'Fortsätt →';
-      document.getElementById('btn-manual-ean').onclick = () => {
-        scannedEAN = v;
-        goToStep2();
-      };
+      const btn = document.getElementById('btn-manual-ean');
+      btn.textContent = 'Fortsätt →';
+      btn.onclick = () => { scannedEAN = v; goToStep2(); };
     }
   };
   input.onkeydown = e => {
@@ -648,10 +549,13 @@ function enableManualEAN() {
 
 function goToStep1() {
   scannedEAN = '';
-  document.getElementById('ean-display').value = '';
-  document.getElementById('ean-display').setAttribute('readonly', true);
-  document.getElementById('btn-manual-ean').textContent = 'Ange EAN manuellt';
-  document.getElementById('btn-manual-ean').onclick = enableManualEAN;
+  const inp = document.getElementById('ean-display');
+  inp.value = '';
+  inp.setAttribute('readonly', true);
+  inp.placeholder = 'Väntar på skanning…';
+  const btn = document.getElementById('btn-manual-ean');
+  btn.textContent = 'Ange EAN manuellt';
+  btn.onclick = enableManualEAN;
   showView(1);
   startQRScanner();
 }
@@ -690,16 +594,13 @@ async function runOCR() {
   const btn    = document.getElementById('btn-ocr');
   const status = document.getElementById('ocr-status');
   btn.disabled = true;
-
   status.innerHTML = '<div class="spinner"></div><span>Läser text…</span>';
 
   const video  = document.getElementById('ocr-video');
   const canvas = document.getElementById('ocr-canvas');
 
-  // Crop to the sight box area (centre 82% wide, 28% tall)
   const vw = video.videoWidth  || 640;
   const vh = video.videoHeight || 480;
-
   const cropW = Math.round(vw * 0.82);
   const cropH = Math.round(vh * 0.28);
   const cropX = Math.round((vw - cropW) / 2);
@@ -707,8 +608,7 @@ async function runOCR() {
 
   canvas.width  = cropW;
   canvas.height = cropH;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
   try {
     const result = await Tesseract.recognize(canvas, 'swe+eng', {
@@ -720,8 +620,7 @@ async function runOCR() {
       }
     });
 
-    const raw  = result.data.text || '';
-    const text = raw.replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const text = (result.data.text || '').replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
     if (text.length > 1) {
       document.getElementById('product-name').value = text;
@@ -744,8 +643,8 @@ async function runOCR() {
 
 function goToStep2() {
   if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
+  stopScanCamera();
   stopOCRCamera();
-  if (html5QrCode) html5QrCode.stop().catch(() => {});
 
   document.getElementById('product-name').value = '';
   document.getElementById('btn-next-step3').disabled = true;
@@ -761,31 +660,14 @@ function goToStep2() {
 function goToStep3() {
   const name = document.getElementById('product-name').value.trim();
   if (!name) { toast('Ange ett produktnamn', 'error'); return; }
-
   stopOCRCamera();
-
   document.getElementById('sum-ean').textContent  = scannedEAN;
   document.getElementById('sum-name').textContent = name;
   document.getElementById('price').value = '';
-
   showView(3);
   setTimeout(() => document.getElementById('price').focus(), 300);
 }
 
-function goToStep2() {
-  if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
-  stopOCRCamera();
-  if (html5QrCode) html5QrCode.stop().catch(() => {});
-
-  document.getElementById('product-name').value = '';
-  document.getElementById('btn-next-step3').disabled = true;
-  document.getElementById('ocr-status').innerHTML = '<span>Tryck på knappen för att läsa text</span>';
-
-  showView(2);
-  startOCRCamera();
-}
-
-// Produktnamn fritext → aktivera Nästa-knappen
 document.getElementById('product-name').addEventListener('input', function() {
   document.getElementById('btn-next-step3').disabled = this.value.trim().length === 0;
 });
@@ -795,43 +677,28 @@ async function saveProduct() {
   const name  = document.getElementById('product-name').value.trim();
   const price = document.getElementById('price').value.trim();
 
-  if (!ean)   { toast('EAN-kod saknas', 'error');    return; }
+  if (!ean)   { toast('EAN-kod saknas', 'error');     return; }
   if (!name)  { toast('Produktnamn saknas', 'error'); return; }
-  if (!price) { toast('Ange ett pris', 'error');     return; }
-
-  if (WEBHOOK_URL === 'KLISTRA_IN_DIN_GOOGLE_APPS_SCRIPT_URL_HÄR') {
-    toast('⚠️ Konfigurera WEBHOOK_URL i koden!', 'error', 4000);
-    return;
-  }
+  if (!price) { toast('Ange ett pris', 'error');      return; }
 
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
   btn.textContent = 'Sparar…';
 
-  const payload = {
-    ean,
-    productName: name,
-    price: parseFloat(price),
-    timestamp: new Date().toISOString()
-  };
-
   try {
-    const resp = await fetch(WEBHOOK_URL, {
+    await fetch(WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ean, productName: name, price: parseFloat(price), timestamp: new Date().toISOString() })
     });
 
     toast('✓ Sparad! Nästa produkt…', 'success', 2200);
     setTimeout(() => {
       scannedEAN = '';
-      document.getElementById('ean-display').value = '';
-      document.getElementById('ean-display').setAttribute('readonly', true);
       btn.disabled = false;
       btn.innerHTML = '✓ SPARA';
-      showView(1);
-      startQRScanner();
+      goToStep1();
     }, 1200);
 
   } catch (err) {
@@ -842,17 +709,12 @@ async function saveProduct() {
   }
 }
 
-// ════════════════════════════════════════════
-//  BOOT
-// ════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
-  startQRScanner();
-});
+// ── Boot ──
+window.addEventListener('DOMContentLoaded', () => { startQRScanner(); });
 
-// Stop camera when page is hidden
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (html5QrCode) html5QrCode.stop().catch(() => {});
+    stopScanCamera();
     stopOCRCamera();
   } else {
     const active = document.querySelector('.view.active')?.id;
