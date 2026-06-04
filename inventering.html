@@ -522,9 +522,19 @@ function onEANScanned(code) {
   if (!scanActive) return;
   stopScanCamera();
   scannedEAN = code;
-  document.getElementById('ean-display').value = code;
+  const inp = document.getElementById('ean-display');
+  inp.value = code;
   toast('✓ Streckkod läst: ' + code, 'success');
-  setTimeout(() => goToStep2(), 600);
+
+  // Show a "Fortsätt" button as immediate fallback
+  const btn = document.getElementById('btn-manual-ean');
+  btn.textContent = '▶ Fortsätt till steg 2';
+  btn.style.background = 'var(--accent)';
+  btn.style.color = '#fff';
+  btn.style.border = 'none';
+  btn.onclick = () => goToStep2();
+
+  setTimeout(() => goToStep2(), 1200);
 }
 
 function enableManualEAN() {
@@ -641,7 +651,7 @@ async function runOCR() {
   ocrBusy = false;
 }
 
-function goToStep2() {
+async function goToStep2() {
   if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
   stopScanCamera();
   stopOCRCamera();
@@ -650,7 +660,16 @@ function goToStep2() {
   document.getElementById('btn-next-step3').disabled = true;
   document.getElementById('ocr-status').innerHTML = '<span>Tryck på knappen för att läsa text</span>';
 
+  // Reset the fortsätt-button style
+  const btn = document.getElementById('btn-manual-ean');
+  btn.textContent = 'Ange EAN manuellt';
+  btn.style = '';
+  btn.onclick = enableManualEAN;
+
   showView(2);
+
+  // Let iOS fully release the camera before acquiring a new stream
+  await new Promise(r => setTimeout(r, 600));
   startOCRCamera();
 }
 
