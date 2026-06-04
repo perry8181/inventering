@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Inventering</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1c1c24;
+    --surface2: #252530;
+    --accent: #6c63ff;
+    --accent2: #a78bfa;
+    --green: #22c55e;
+    --red: #ef4444;
+    --text: #f1f1f5;
+    --muted: #8b8b9e;
+    --border: #2e2e3a;
+    --radius: 16px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overscroll-behavior: none;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 env(safe-area-inset-bottom, 16px);
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 20px 20px 12px;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Step indicator ── */
+  .steps {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .step-dot {
+    flex: 1;
+    height: 4px;
+    border-radius: 4px;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+
+  .step-dot.active { background: var(--accent); }
+  .step-dot.done   { background: var(--green); }
+
+  /* ── Content ── */
+  .content {
+    flex: 1;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .step-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+  }
+
+  .step-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* ── Camera container ── */
+  .camera-wrap {
+    position: relative;
+    width: 100%;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+    aspect-ratio: 4/3;
+  }
+
+  #qr-reader, #ocr-video-wrap {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Override html5-qrcode styles */
+  #qr-reader > div:first-child { border: none !important; }
+  #qr-reader img, #qr-reader button { display: none !important; }
+  #qr-reader__scan_region { height: 100% !important; }
+  #qr-reader__scan_region video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+  #qr-reader__scan_region > img { display: none !important; }
+
+  /* ── OCR overlay ── */
+  #ocr-video-wrap {
+    position: relative;
+  }
+
+  #ocr-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #ocr-canvas { display: none; }
+
+  .sight-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82%;
+    height: 28%;
+    border: 2px solid var(--accent2);
+    border-radius: 8px;
+    pointer-events: none;
+  }
+
+  .sight-box::before, .sight-box::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+  }
+
+  .sight-label {
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--accent2);
+    white-space: nowrap;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .sight-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    pointer-events: none;
+  }
+
+  .sight-hole {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82%;
+    height: 28%;
+    background: transparent;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+    border-radius: 8px;
+  }
+
+  /* ── Input fields ── */
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+
+  textarea {
+    resize: none;
+    min-height: 80px;
+    line-height: 1.5;
+    font-family: inherit;
+  }
+
+  input:focus, textarea:focus {
+    border-color: var(--accent);
+  }
+
+  input[readonly] {
+    color: var(--muted);
+    background: var(--surface2);
+    cursor: default;
+  }
+
+  .field-badge {
+    position: absolute;
+    right: 12px;
+    background: var(--green);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.4px;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius);
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    letter-spacing: -0.2px;
+  }
+
+  .btn:active { transform: scale(0.97); opacity: 0.85; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-success {
+    background: var(--green);
+    color: #fff;
+    font-size: 18px;
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--muted);
+    border: 1.5px solid var(--border);
+    font-size: 14px;
+    padding: 12px;
+  }
+
+  .btn-sm {
+    padding: 12px 16px;
+    font-size: 14px;
+    border-radius: 12px;
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ── OCR status ── */
+  .ocr-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-radius: 12px;
+    font-size: 14px;
+    color: var(--muted);
+    min-height: 48px;
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 16px) + 20px);
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 999;
+    max-width: calc(100vw - 40px);
+    text-align: center;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error   { border-color: var(--red);   color: var(--red); }
+
+  /* ── Views ── */
+  .view { display: none; flex-direction: column; gap: 20px; }
+  .view.active { display: flex; }
+
+  /* ── Price ── */
+  .price-input-wrap {
+    position: relative;
+  }
+
+  .price-input-wrap input {
+    padding-left: 40px;
+    font-size: 24px;
+    font-weight: 700;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .price-currency {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  /* ── Summary card ── */
+  .summary-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .summary-key {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .summary-val {
+    font-size: 14px;
+    font-weight: 600;
+    text-align: right;
+    word-break: break-all;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1>📦 Inventering</h1>
+    <div class="steps">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══ STEP 1: EAN Scanner ═══ -->
+    <div class="view active" id="view1">
+      <div>
+        <div class="step-title">Steg 1 av 3</div>
+        <div class="step-subtitle">Rikta kameran mot streckkoden. Skanningen startar automatiskt.</div>
+      </div>
+
+      <div class="camera-wrap">
+        <div id="qr-reader"></div>
+      </div>
+
+      <div class="field-group">
+        <label>EAN-kod</label>
+        <div class="input-wrap">
+          <input type="text" id="ean-display" readonly placeholder="Väntar på skanning…">
+        </div>
+      </div>
+
+      <button class="btn btn-outline btn-sm" id="btn-manual-ean" onclick="enableManualEAN()">
+        Ange EAN manuellt
+      </button>
+    </div>
+
+    <!-- ═══ STEP 2: OCR ═══ -->
+    <div class="view" id="view2">
+      <div>
+        <div class="step-title">Steg 2 av 3</div>
+        <div class="step-subtitle">Rikta kameran mot produktnamnet och tryck på "Läs text".</div>
+      </div>
+
+      <div class="camera-wrap">
+        <div id="ocr-video-wrap">
+          <video id="ocr-video" autoplay playsinline muted></video>
+          <canvas id="ocr-canvas"></canvas>
+          <div class="sight-overlay">
+            <div class="sight-hole"></div>
+          </div>
+          <div class="sight-box">
+            <div class="sight-label">Placera produktnamnet här</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ocr-status" id="ocr-status">
+        <span>Tryck på knappen för att läsa text</span>
+      </div>
+
+      <button class="btn btn-primary" id="btn-ocr" onclick="runOCR()">
+        📷 Läs text
+      </button>
+
+      <div class="field-group">
+        <label>Produktnamn</label>
+        <textarea id="product-name" rows="3" placeholder="Texten visas här – korrigera vid behov…"></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="btn-next-step3" onclick="goToStep3()" disabled>
+        Nästa →
+      </button>
+
+      <button class="btn btn-outline btn-sm" onclick="goToStep1()">
+        ← Skanna om EAN
+      </button>
+    </div>
+
+    <!-- ═══ STEP 3: Price & Save ═══ -->
+    <div class="view" id="view3">
+      <div>
+        <div class="step-title">Steg 3 av 3</div>
+        <div class="step-subtitle">Ange inköpspriset och spara produkten.</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-row">
+          <span class="summary-key">EAN</span>
+          <span class="summary-val" id="sum-ean">–</span>
+        </div>
+        <div class="divider"></div>
+        <div class="summary-row">
+          <span class="summary-key">Produkt</span>
+          <span class="summary-val" id="sum-name">–</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label>Inköpspris exkl. moms (SEK)</label>
+        <div class="price-input-wrap">
+          <span class="price-currency">kr</span>
+          <input type="number" id="price" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+
+      <button class="btn btn-success" id="btn-save" onclick="saveProduct()">
+        ✓ SPARA
+      </button>
+
+      <button class="btn btn-outline btn-sm" onclick="goToStep2()">
+        ← Ändra produktnamn
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  CONFIG – byt ut URL:en mot din Webhook-URL
+// ════════════════════════════════════════════
+const WEBHOOK_URL = 'KLISTRA_IN_DIN_GOOGLE_APPS_SCRIPT_URL_HÄR';
+
+// ════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════
+let scannedEAN  = '';
+let ocrStream   = null;
+let html5QrCode = null;
+let ocrBusy     = false;
+
+// ════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════
+function toast(msg, type = '', dur = 2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, dur);
+}
+
+function setDots(active) {
+  [1, 2, 3].forEach(i => {
+    const d = document.getElementById('dot' + i);
+    d.className = 'step-dot' + (i < active ? ' done' : i === active ? ' active' : '');
+  });
+}
+
+function showView(n) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view' + n).classList.add('active');
+  setDots(n);
+}
+
+// ════════════════════════════════════════════
+//  STEP 1 – EAN Scanner
+// ════════════════════════════════════════════
+function startQRScanner() {
+  stopOCRCamera();
+
+  if (html5QrCode) {
+    html5QrCode.stop().catch(() => {}).finally(initScanner);
+  } else {
+    initScanner();
+  }
+}
+
+function initScanner() {
+  document.getElementById('qr-reader').innerHTML = '';
+  html5QrCode = new Html5Qrcode('qr-reader');
+
+  const config = {
+    fps: 15,
+    qrbox: { width: 260, height: 120 },
+    aspectRatio: 4 / 3,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+    ]
+  };
+
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    config,
+    onEANScanned,
+    () => {}
+  ).catch(err => {
+    console.error('Scanner error:', err);
+    toast('Kamerafel – kontrollera behörigheter', 'error');
+  });
+}
+
+function onEANScanned(code) {
+  html5QrCode.stop().catch(() => {});
+  scannedEAN = code;
+  document.getElementById('ean-display').value = code;
+  toast('✓ Streckkod läst: ' + code, 'success');
+  setTimeout(() => goToStep2(), 600);
+}
+
+function enableManualEAN() {
+  const input = document.getElementById('ean-display');
+  input.removeAttribute('readonly');
+  input.focus();
+  input.placeholder = 'Ange EAN-kod…';
+
+  if (html5QrCode) html5QrCode.stop().catch(() => {});
+
+  // Listen for enter or 13-digit input
+  input.oninput = () => {
+    const v = input.value.trim();
+    if (v.length >= 8) {
+      document.getElementById('btn-manual-ean').textContent = 'Fortsätt →';
+      document.getElementById('btn-manual-ean').onclick = () => {
+        scannedEAN = v;
+        goToStep2();
+      };
+    }
+  };
+  input.onkeydown = e => {
+    if (e.key === 'Enter') { scannedEAN = input.value.trim(); goToStep2(); }
+  };
+}
+
+function goToStep1() {
+  scannedEAN = '';
+  document.getElementById('ean-display').value = '';
+  document.getElementById('ean-display').setAttribute('readonly', true);
+  document.getElementById('btn-manual-ean').textContent = 'Ange EAN manuellt';
+  document.getElementById('btn-manual-ean').onclick = enableManualEAN;
+  showView(1);
+  startQRScanner();
+}
+
+// ════════════════════════════════════════════
+//  STEP 2 – OCR
+// ════════════════════════════════════════════
+async function startOCRCamera() {
+  try {
+    ocrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const video = document.getElementById('ocr-video');
+    video.srcObject = ocrStream;
+    await video.play();
+  } catch (err) {
+    console.error('OCR camera error:', err);
+    toast('Kamerafel för OCR', 'error');
+  }
+}
+
+function stopOCRCamera() {
+  if (ocrStream) {
+    ocrStream.getTracks().forEach(t => t.stop());
+    ocrStream = null;
+  }
+  const video = document.getElementById('ocr-video');
+  if (video) video.srcObject = null;
+}
+
+async function runOCR() {
+  if (ocrBusy) return;
+  ocrBusy = true;
+
+  const btn    = document.getElementById('btn-ocr');
+  const status = document.getElementById('ocr-status');
+  btn.disabled = true;
+
+  status.innerHTML = '<div class="spinner"></div><span>Läser text…</span>';
+
+  const video  = document.getElementById('ocr-video');
+  const canvas = document.getElementById('ocr-canvas');
+
+  // Crop to the sight box area (centre 82% wide, 28% tall)
+  const vw = video.videoWidth  || 640;
+  const vh = video.videoHeight || 480;
+
+  const cropW = Math.round(vw * 0.82);
+  const cropH = Math.round(vh * 0.28);
+  const cropX = Math.round((vw - cropW) / 2);
+  const cropY = Math.round((vh - cropH) / 2);
+
+  canvas.width  = cropW;
+  canvas.height = cropH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  try {
+    const result = await Tesseract.recognize(canvas, 'swe+eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round((m.progress || 0) * 100);
+          status.innerHTML = `<div class="spinner"></div><span>Läser text… ${pct}%</span>`;
+        }
+      }
+    });
+
+    const raw  = result.data.text || '';
+    const text = raw.replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+    if (text.length > 1) {
+      document.getElementById('product-name').value = text;
+      status.innerHTML = '<span style="color:var(--green)">✓ Text läst – korrigera vid behov</span>';
+      document.getElementById('btn-next-step3').disabled = false;
+      toast('Text läst!', 'success');
+    } else {
+      status.innerHTML = '<span style="color:var(--red)">Ingen text hittades – försök igen</span>';
+      toast('Ingen text hittades', 'error');
+    }
+  } catch (err) {
+    console.error('OCR error:', err);
+    status.innerHTML = '<span style="color:var(--red)">OCR-fel – försök igen</span>';
+    toast('OCR-fel', 'error');
+  }
+
+  btn.disabled = false;
+  ocrBusy = false;
+}
+
+function goToStep2() {
+  if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
+  stopOCRCamera();
+  if (html5QrCode) html5QrCode.stop().catch(() => {});
+
+  document.getElementById('product-name').value = '';
+  document.getElementById('btn-next-step3').disabled = true;
+  document.getElementById('ocr-status').innerHTML = '<span>Tryck på knappen för att läsa text</span>';
+
+  showView(2);
+  startOCRCamera();
+}
+
+// ════════════════════════════════════════════
+//  STEP 3 – Price & Save
+// ════════════════════════════════════════════
+function goToStep3() {
+  const name = document.getElementById('product-name').value.trim();
+  if (!name) { toast('Ange ett produktnamn', 'error'); return; }
+
+  stopOCRCamera();
+
+  document.getElementById('sum-ean').textContent  = scannedEAN;
+  document.getElementById('sum-name').textContent = name;
+  document.getElementById('price').value = '';
+
+  showView(3);
+  setTimeout(() => document.getElementById('price').focus(), 300);
+}
+
+function goToStep2() {
+  if (!scannedEAN) { toast('Skanna en EAN-kod först', 'error'); return; }
+  stopOCRCamera();
+  if (html5QrCode) html5QrCode.stop().catch(() => {});
+
+  document.getElementById('product-name').value = '';
+  document.getElementById('btn-next-step3').disabled = true;
+  document.getElementById('ocr-status').innerHTML = '<span>Tryck på knappen för att läsa text</span>';
+
+  showView(2);
+  startOCRCamera();
+}
+
+// Produktnamn fritext → aktivera Nästa-knappen
+document.getElementById('product-name').addEventListener('input', function() {
+  document.getElementById('btn-next-step3').disabled = this.value.trim().length === 0;
+});
+
+async function saveProduct() {
+  const ean   = scannedEAN;
+  const name  = document.getElementById('product-name').value.trim();
+  const price = document.getElementById('price').value.trim();
+
+  if (!ean)   { toast('EAN-kod saknas', 'error');    return; }
+  if (!name)  { toast('Produktnamn saknas', 'error'); return; }
+  if (!price) { toast('Ange ett pris', 'error');     return; }
+
+  if (WEBHOOK_URL === 'KLISTRA_IN_DIN_GOOGLE_APPS_SCRIPT_URL_HÄR') {
+    toast('⚠️ Konfigurera WEBHOOK_URL i koden!', 'error', 4000);
+    return;
+  }
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = 'Sparar…';
+
+  const payload = {
+    ean,
+    productName: name,
+    price: parseFloat(price),
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    const resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    toast('✓ Sparad! Nästa produkt…', 'success', 2200);
+    setTimeout(() => {
+      scannedEAN = '';
+      document.getElementById('ean-display').value = '';
+      document.getElementById('ean-display').setAttribute('readonly', true);
+      btn.disabled = false;
+      btn.innerHTML = '✓ SPARA';
+      showView(1);
+      startQRScanner();
+    }, 1200);
+
+  } catch (err) {
+    console.error('Fetch error:', err);
+    toast('Nätverksfel – kontrollera anslutning', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '✓ SPARA';
+  }
+}
+
+// ════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  startQRScanner();
+});
+
+// Stop camera when page is hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (html5QrCode) html5QrCode.stop().catch(() => {});
+    stopOCRCamera();
+  } else {
+    const active = document.querySelector('.view.active')?.id;
+    if (active === 'view1') startQRScanner();
+    if (active === 'view2') startOCRCamera();
+  }
+});
+</script>
+</body>
+</html>
