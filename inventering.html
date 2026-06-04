@@ -599,17 +599,8 @@ function initScanner() {
   html5QrCode = new Html5Qrcode('qr-reader');
 
   const config = {
-    fps: 15,
-    qrbox: { width: 260, height: 120 },
-    aspectRatio: 4 / 3,
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-    ]
+    fps: 10,
+    qrbox: { width: 280, height: 140 },
   };
 
   html5QrCode.start(
